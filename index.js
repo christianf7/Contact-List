@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const basicAuth = require('basic-auth');
-const fetch = require('node-fetch');
+const fetch = (...args) =>
+  import('node-fetch').then(mod => mod.default(...args));
 
 const app = express();
 const port = process.env.PORT || 3000;
