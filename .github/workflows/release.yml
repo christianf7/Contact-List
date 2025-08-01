@@ -10,7 +10,11 @@ env:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
