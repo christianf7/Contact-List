@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - API_KEY=${API_KEY}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - WEBHOOK_URL=${WEBHOOK_URL}
