@@ -7,6 +7,8 @@ services:
       - API_KEY=${API_KEY}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - WEBHOOK_URL=${WEBHOOK_URL}
+    volumes:
+      - ./contacts.json:/usr/src/app/contacts.json
     networks:
       - app_network
 
