@@ -2,12 +2,25 @@ version: '3.8'
 
 services:
   app:
-    build: .
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
+    image: ghcr.io/christianf7/elcontact:main
     environment:
       - API_KEY=${API_KEY}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - WEBHOOK_URL=${WEBHOOK_URL}
+    networks:
+      - app_network
+
+  tunnel:
+    image: cloudflare/cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    depends_on:
+      - app
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
