@@ -1,35 +1,15 @@
 require('dotenv').config();
 const express   = require('express');
 const basicAuth = require('basic-auth');
-const fs        = require('fs');
 const path      = require('path');
+const Datastore = require('nedb-promises');
 
 const app       = express();
 const port      = process.env.PORT || 3000;
-const DATA_FILE = path.resolve(__dirname, 'contacts.json');
-
-// --- load existing contacts (or start empty) ---
-let contacts = [];
-try {
-  const raw = fs.readFileSync(DATA_FILE, 'utf8');
-  contacts  = JSON.parse(raw);
-} catch (err) {
-  if (err.code !== 'ENOENT') console.error('Failed to load contacts:', err);
-  contacts = [];
-}
-
-// helper: save contacts array back to disk
-async function saveContacts() {
-  try {
-    await fs.promises.writeFile(
-      DATA_FILE,
-      JSON.stringify(contacts, null, 2),
-      'utf8'
-    );
-  } catch (err) {
-    console.error('Failed to save contacts:', err);
-  }
-}
+const db = Datastore.create({
+  filename: path.resolve(__dirname, 'contacts.db'),
+  autoload: true,
+});
 
 // Parse JSON bodies
 app.use(express.json());
@@ -48,20 +28,17 @@ app.post('/api/contacts', validateApiKey, async (req, res) => {
   const { email, firstName, lastName } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
-  if (contacts.find(c => c.email === email)) {
-    return res.status(400).json({ error: 'Contact already exists' });
-  }
+    if (await db.findOne({ email })) {
+      return res.status(400).json({ error: 'Contact already exists' });
+    }
 
-  const contact = {
-    email,
-    firstName: firstName || '',
-    lastName:  lastName  || '',
-    createdAt: new Date().toISOString(),
-  };
-  contacts.push(contact);
-
-  // persist
-  await saveContacts();
+    const contact = {
+      email,
+      firstName: firstName || '',
+      lastName:  lastName  || '',
+      createdAt: new Date().toISOString(),
+    };
+    await db.insert(contact);
 
   // webhook
   if (process.env.WEBHOOK_URL) {
@@ -94,20 +71,67 @@ function auth(req, res, next) {
   next();
 }
 
-// Web UI
-app.get('/contacts', auth, (req, res) => {
-  const listItems = contacts
-    .slice()
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(c => `<li>${c.email} — added at ${c.createdAt}</li>`)
-    .join('');
+// Export contacts as CSV
+  app.get('/contacts/export', auth, async (req, res) => {
+    const contacts = await db.find({});
+    const lines = [
+      'firstName,lastName,email,createdAt',
+      ...contacts.map(c =>
+        [c.firstName, c.lastName, c.email, c.createdAt]
+          .map(v => `"${(v || '').replace(/"/g, '""')}"`)
+          .join(',')
+      ),
+    ];
 
-  res.send(`
-    <html>
-      <head><title>Contacts</title></head>
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="contacts.csv"');
+    res.send(lines.join('\n'));
+  });
+
+// Web UI
+  app.get('/contacts', auth, async (req, res) => {
+    const contacts = await db.find({});
+    const rows = contacts
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map(
+        c => `
+          <tr>
+            <td>${c.firstName}</td>
+            <td>${c.lastName}</td>
+            <td>${c.email}</td>
+            <td>${new Date(c.createdAt).toLocaleString()}</td>
+          </tr>`
+      )
+      .join('');
+
+    res.send(`
+      <html>
+        <head>
+          <title>Contacts</title>
+          <style>
+          body { font-family: Arial, sans-serif; margin: 2rem; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { padding: 8px 12px; border: 1px solid #ddd; }
+          th { background-color: #f4f4f4; text-align: left; }
+          tr:nth-child(even) { background-color: #f9f9f9; }
+          .export-btn { margin-bottom: 1rem; display: inline-block; padding: 8px 12px; background-color: #007BFF; color: white; text-decoration: none; border-radius: 4px; }
+          .export-btn:hover { background-color: #0056b3; }
+        </style>
+      </head>
       <body>
         <h1>Registered Contacts</h1>
-        <ul>${listItems}</ul>
+        <a class="export-btn" href="/contacts/export">Export CSV</a>
+        <table>
+          <thead>
+            <tr>
+              <th>First Name</th>
+              <th>Last Name</th>
+              <th>Email</th>
+              <th>Added</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
       </body>
     </html>
   `);
