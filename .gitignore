@@ -74,6 +74,7 @@ web_modules/
 *.db
 data/
 
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
