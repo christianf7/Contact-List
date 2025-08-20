@@ -8,7 +8,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - WEBHOOK_URL=${WEBHOOK_URL}
     volumes:
-      - ./contacts.json:/usr/src/app/contacts.json
+      - ./data:/usr/src/app/data
     networks:
       - app_network
 
