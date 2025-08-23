@@ -1,4 +1,4 @@
-# ElContact
+# Contact List
 
 Simple contact capture service with a minimal web UI.
 
