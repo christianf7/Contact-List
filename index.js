@@ -234,6 +234,41 @@ app.post('/contacts/add', ensureLoggedIn, async (req, res) => {
   }
 });
 
+app.post('/contacts/:id/edit', ensureLoggedIn, async (req, res) => {
+  const { id } = req.params;
+  const { firstName, email, createdAt } = req.body;
+  try {
+    const existing = await contactsDb.findOne({ email, _id: { $ne: id } });
+    if (existing) {
+      return res.status(400).send('Contact already exists');
+    }
+    await contactsDb.update(
+      { _id: id },
+      {
+        $set: {
+          firstName,
+          email,
+          createdAt: createdAt
+            ? new Date(createdAt).toISOString()
+            : new Date().toISOString(),
+        },
+      }
+    );
+    res.redirect('/contacts');
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
+app.post('/contacts/:id/delete', ensureLoggedIn, async (req, res) => {
+  try {
+    await contactsDb.remove({ _id: req.params.id });
+    res.redirect('/contacts');
+  } catch (err) {
+    res.status(400).send(err.message);
+  }
+});
+
 // Bulk add contacts from CSV upload
 app.post('/contacts/bulk', ensureLoggedIn, upload.single('csv'), async (req, res) => {
   if (!req.file) {
