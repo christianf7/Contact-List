@@ -163,7 +163,7 @@ app.post('/api/contacts', validateApiKey, async (req, res) => {
 
 // Authentication routes
 app.get('/login', (req, res) => {
-  res.send(render('login.ejs', {}));
+  res.send(render('login.ejs', { error: null }));
 });
 
 app.post('/login', async (req, res) => {
