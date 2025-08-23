@@ -1,4 +1,11 @@
-require('dotenv').config();
+function ensureAdmin(req, res, next) {
+  const session = getSession(req);
+  if (!session || !session.isAdmin) {
+    return res.redirect("/no-permission");
+  }
+  req.session = session;
+  next();
+}require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -65,7 +72,7 @@ function ensureLoggedIn(req, res, next) {
 function ensureAdmin(req, res, next) {
   const session = getSession(req);
   if (!session || !session.isAdmin) {
-    return res.status(403).send('Forbidden');
+    return res.redirect('/no-permission');
   }
   req.session = session;
   next();
@@ -195,6 +202,9 @@ app.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
+app.get('/no-permission', (req, res) => {
+  res.status(403).send(render('no-permission.ejs'));
+});
 // User management
 app.get('/users', ensureAdmin, async (req, res) => {
   const users = await usersDb.find({});
