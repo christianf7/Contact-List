@@ -12,6 +12,9 @@
         <span class="navbar-brand">Contacts</span>
         <div class="d-flex">
           <span class="navbar-text me-3">Total: <%= total %></span>
+          <% if (isAdmin) { %>
+            <a class="btn btn-outline-light me-2" href="/users">Users</a>
+          <% } %>
           <a class="btn btn-outline-light" href="/logout">Logout</a>
         </div>
       </div>
@@ -40,17 +43,19 @@
         </div>
       </form>
 
-      <form class="mb-4" action="/contacts/bulk" method="post" enctype="multipart/form-data">
-        <div class="row g-3 align-items-center">
-          <div class="col-auto">
-            <label class="form-label">Bulk CSV</label>
-            <input class="form-control" type="file" name="csv" accept=".csv" required />
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-secondary" type="submit">Upload</button>
-          </div>
+      <form class="row g-3 align-items-center mb-4" action="/contacts/bulk" method="post" enctype="multipart/form-data">
+        <div class="col-auto">
+          <label class="col-form-label">Bulk CSV</label>
         </div>
-        <div class="form-text">CSV headers: firstName,email,createdAt</div>
+        <div class="col-auto">
+          <input class="form-control" type="file" name="csv" accept=".csv" required />
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-secondary" type="submit">Upload</button>
+        </div>
+        <div class="col-12">
+          <div class="form-text">CSV headers: firstName,email,createdAt</div>
+        </div>
       </form>
 
       <a class="btn btn-success mb-3" href="/contacts/export">Download CSV</a>
@@ -69,7 +74,7 @@
             <tr>
               <td><%= c.firstName %></td>
               <td><%= c.email %></td>
-              <td><%= new Date(c.createdAt).toLocaleString() %></td>
+              <td><%= new Date(c.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' }) %></td>
               <td>
                 <button
                   class="btn btn-sm btn-secondary me-1"

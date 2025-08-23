@@ -162,6 +162,14 @@ app.post('/api/contacts', validateApiKey, async (req, res) => {
 });
 
 // Authentication routes
+app.get('/', (req, res) => {
+  const session = getSession(req);
+  if (session) {
+    return res.redirect('/contacts');
+  }
+  res.send(render('landing.ejs'));
+});
+
 app.get('/login', (req, res) => {
   res.send(render('login.ejs', { error: null }));
 });
@@ -309,7 +317,9 @@ app.get('/contacts', ensureLoggedIn, async (req, res) => {
     const day = new Date(today);
     day.setDate(today.getDate() - i);
     const dayStr = day.toISOString().slice(0, 10);
-    labels.push(day.toLocaleDateString());
+    labels.push(
+      day.toLocaleDateString('en-AU', { timeZone: 'Australia/Brisbane' })
+    );
     data.push(contacts.filter(c => c.createdAt.slice(0, 10) === dayStr).length);
   }
   res.send(
@@ -318,6 +328,7 @@ app.get('/contacts', ensureLoggedIn, async (req, res) => {
       total,
       labels: JSON.stringify(labels),
       data: JSON.stringify(data),
+      isAdmin: req.session.isAdmin,
     })
   );
 });
