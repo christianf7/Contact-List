@@ -309,7 +309,9 @@ app.get('/contacts', ensureLoggedIn, async (req, res) => {
     const day = new Date(today);
     day.setDate(today.getDate() - i);
     const dayStr = day.toISOString().slice(0, 10);
-    labels.push(day.toLocaleDateString());
+    labels.push(
+      day.toLocaleDateString('en-AU', { timeZone: 'Australia/Sydney' })
+    );
     data.push(contacts.filter(c => c.createdAt.slice(0, 10) === dayStr).length);
   }
   res.send(
@@ -318,6 +320,7 @@ app.get('/contacts', ensureLoggedIn, async (req, res) => {
       total,
       labels: JSON.stringify(labels),
       data: JSON.stringify(data),
+      isAdmin: req.session.isAdmin,
     })
   );
 });
