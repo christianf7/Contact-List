@@ -6,7 +6,6 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "basic-auth": "^2.0.1",
     "csv-parse": "^5.5.0",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
