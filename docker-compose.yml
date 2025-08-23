@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   app:
-    image: ghcr.io/christianf7/elcontact:main
+    image: ghcr.io/christianf7/contact-list:main
     environment:
       - API_KEY=${API_KEY}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
