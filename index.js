@@ -1,11 +1,12 @@
 require('dotenv').config();
 const express = require('express');
-const basicAuth = require('basic-auth');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const Datastore = require('nedb-promises');
 const multer = require('multer');
 const { parse } = require('csv-parse/sync');
+const { render } = require('./lib/template');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,14 +15,100 @@ const port = process.env.PORT || 3000;
 const dataDir = path.resolve(__dirname, 'data');
 fs.mkdirSync(dataDir, { recursive: true });
 
-const db = Datastore.create({
+const contactsDb = Datastore.create({
   filename: path.join(dataDir, 'contacts.db'),
+  autoload: true,
+});
+const usersDb = Datastore.create({
+  filename: path.join(dataDir, 'users.db'),
   autoload: true,
 });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const upload = multer();
+
+// simple in-memory sessions
+const sessions = new Map();
+
+function parseCookies(req) {
+  const list = {};
+  const rc = req.headers.cookie;
+  if (!rc) return list;
+  rc.split(';').forEach(cookie => {
+    const parts = cookie.split('=');
+    const key = parts.shift().trim();
+    if (!key) return;
+    const value = decodeURIComponent(parts.join('='));
+    list[key] = value;
+  });
+  return list;
+}
+
+function getSession(req) {
+  const { sid } = parseCookies(req);
+  if (sid && sessions.has(sid)) {
+    return sessions.get(sid);
+  }
+  return null;
+}
+
+function ensureLoggedIn(req, res, next) {
+  const session = getSession(req);
+  if (!session) {
+    return res.redirect('/login');
+  }
+  req.session = session;
+  next();
+}
+
+function ensureAdmin(req, res, next) {
+  const session = getSession(req);
+  if (!session || !session.isAdmin) {
+    return res.status(403).send('Forbidden');
+  }
+  req.session = session;
+  next();
+}
+
+function createSession(res, user) {
+  const sid = crypto.randomBytes(16).toString('hex');
+  sessions.set(sid, user);
+  res.setHeader('Set-Cookie', `sid=${sid}; HttpOnly; Path=/`);
+}
+
+function destroySession(req, res) {
+  const { sid } = parseCookies(req);
+  if (sid) {
+    sessions.delete(sid);
+    res.setHeader('Set-Cookie', 'sid=; Max-Age=0; Path=/');
+  }
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+function verifyPassword(password, stored) {
+  const [salt, hash] = stored.split(':');
+  const hashed = crypto.scryptSync(password, salt, 64).toString('hex');
+  return hash === hashed;
+}
+
+async function initAdmin() {
+  const username = process.env.ADMIN_USERNAME || 'admin';
+  const password = process.env.ADMIN_PASSWORD || 'admin';
+  const existing = await usersDb.findOne({ username });
+  if (!existing) {
+    await usersDb.insert({
+      username,
+      passwordHash: hashPassword(password),
+      isAdmin: true,
+    });
+    console.log('Admin user created');
+  }
+}
+initAdmin();
 
 // API-key middleware
 function validateApiKey(req, res, next) {
@@ -36,12 +123,12 @@ async function insertContact({ email, firstName = '', createdAt = new Date().toI
   if (!email) {
     throw new Error('Email is required');
   }
-  if (await db.findOne({ email })) {
+  if (await contactsDb.findOne({ email })) {
     throw new Error('Contact already exists');
   }
 
   const contact = { email, firstName, createdAt };
-  await db.insert(contact);
+  await contactsDb.insert(contact);
   console.log('Contact added:', contact);
 
   if (process.env.WEBHOOK_URL) {
@@ -74,19 +161,51 @@ app.post('/api/contacts', validateApiKey, async (req, res) => {
   }
 });
 
-// Basic-auth middleware for UI
-function auth(req, res, next) {
-  const user = basicAuth(req);
-  if (!user || user.name !== 'admin' || user.pass !== process.env.ADMIN_PASSWORD) {
-    res.set('WWW-Authenticate', 'Basic realm="Contacts"');
-    return res.status(401).send('Authentication required.');
+// Authentication routes
+app.get('/login', (req, res) => {
+  res.send(render('login.ejs', {}));
+});
+
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  const user = await usersDb.findOne({ username });
+  if (!user || !verifyPassword(password, user.passwordHash)) {
+    return res.send(render('login.ejs', { error: 'Invalid credentials' }));
   }
-  next();
-}
+  createSession(res, { username: user.username, isAdmin: user.isAdmin });
+  res.redirect('/contacts');
+});
+
+app.get('/logout', (req, res) => {
+  destroySession(req, res);
+  res.redirect('/login');
+});
+
+// User management
+app.get('/users', ensureAdmin, async (req, res) => {
+  const users = await usersDb.find({});
+  res.send(render('users.ejs', { users }));
+});
+
+app.post('/users/add', ensureAdmin, async (req, res) => {
+  const { username, password, isAdmin } = req.body;
+  if (!username || !password) {
+    return res.status(400).send('Username and password required');
+  }
+  if (await usersDb.findOne({ username })) {
+    return res.status(400).send('User exists');
+  }
+  await usersDb.insert({
+    username,
+    passwordHash: hashPassword(password),
+    isAdmin: isAdmin === 'on',
+  });
+  res.redirect('/users');
+});
 
 // Export contacts as CSV
-app.get('/contacts/export', auth, async (req, res) => {
-  const contacts = await db.find({});
+app.get('/contacts/export', ensureLoggedIn, async (req, res) => {
+  const contacts = await contactsDb.find({});
   const lines = [
     'firstName,email,createdAt',
     ...contacts.map(c =>
@@ -95,14 +214,13 @@ app.get('/contacts/export', auth, async (req, res) => {
         .join(',')
     ),
   ];
-
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="contacts.csv"');
   res.send(lines.join('\n'));
 });
 
 // Add single contact from UI
-app.post('/contacts/add', auth, async (req, res) => {
+app.post('/contacts/add', ensureLoggedIn, async (req, res) => {
   const { firstName, email, createdAt } = req.body;
   try {
     await insertContact({
@@ -117,7 +235,7 @@ app.post('/contacts/add', auth, async (req, res) => {
 });
 
 // Bulk add contacts from CSV upload
-app.post('/contacts/bulk', auth, upload.single('csv'), async (req, res) => {
+app.post('/contacts/bulk', ensureLoggedIn, upload.single('csv'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send('CSV file required');
   }
@@ -144,83 +262,31 @@ app.post('/contacts/bulk', auth, upload.single('csv'), async (req, res) => {
   }
 });
 
-// Web UI
-app.get('/contacts', auth, async (req, res) => {
-  const contacts = await db.find({});
-  const rows = contacts
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(
-      c => `
-          <tr>
-            <td>${c.firstName}</td>
-            <td>${c.email}</td>
-            <td>${new Date(c.createdAt).toLocaleString()}</td>
-          </tr>`
-    )
-    .join('');
-
-  res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Contacts</title>
-          <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-        </head>
-        <body class="bg-light">
-          <div class="container py-4">
-            <h1 class="mb-4">Registered Contacts</h1>
-            <form class="row gy-2 gx-3 align-items-end mb-4" action="/contacts/add" method="post">
-              <div class="col-sm-3">
-                <label class="form-label">Name</label>
-                <input class="form-control" type="text" name="firstName" />
-              </div>
-              <div class="col-sm-3">
-                <label class="form-label">Email*</label>
-                <input class="form-control" type="email" name="email" required />
-              </div>
-              <div class="col-sm-3">
-                <label class="form-label">Date</label>
-                <input class="form-control" type="datetime-local" name="createdAt" />
-              </div>
-              <div class="col-sm-3">
-                <button class="btn btn-primary" type="submit">Add Contact</button>
-              </div>
-            </form>
-
-            <form class="mb-4" action="/contacts/bulk" method="post" enctype="multipart/form-data">
-              <div class="row g-3 align-items-center">
-                <div class="col-auto">
-                  <label class="form-label">Bulk CSV</label>
-                  <input class="form-control" type="file" name="csv" accept=".csv" required />
-                </div>
-                <div class="col-auto">
-                  <button class="btn btn-secondary" type="submit">Upload</button>
-                </div>
-              </div>
-              <div class="form-text">CSV headers: firstName,email,createdAt</div>
-            </form>
-
-            <a class="btn btn-success mb-3" href="/contacts/export">Download CSV</a>
-
-            <table class="table table-striped">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Added</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-        </body>
-      </html>
-  `);
+// Contacts UI
+app.get('/contacts', ensureLoggedIn, async (req, res) => {
+  const contacts = await contactsDb.find({});
+  contacts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const total = contacts.length;
+  const today = new Date();
+  const labels = [];
+  const data = [];
+  for (let i = 29; i >= 0; i--) {
+    const day = new Date(today);
+    day.setDate(today.getDate() - i);
+    const dayStr = day.toISOString().slice(0, 10);
+    labels.push(day.toLocaleDateString());
+    data.push(contacts.filter(c => c.createdAt.slice(0, 10) === dayStr).length);
+  }
+  res.send(
+    render('contacts.ejs', {
+      contacts,
+      total,
+      labels: JSON.stringify(labels),
+      data: JSON.stringify(data),
+    })
+  );
 });
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
-
