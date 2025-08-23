@@ -32,16 +32,43 @@
         </div>
       </form>
 
-      <table class="table table-striped">
+      <table class="table table-striped align-middle">
         <thead>
-          <tr><th>Username</th><th>Admin</th></tr>
+          <tr>
+            <th>Username</th>
+            <th class="text-center">Admin</th>
+            <th>Created</th>
+            <th>Created By</th>
+            <th>New Password</th>
+            <th>Actions</th>
+          </tr>
         </thead>
         <tbody>
           <% users.forEach(u => { %>
             <tr>
-              <td><%= u.username %></td>
-              <td><%= u.isAdmin ? 'Yes' : 'No' %></td>
+              <td>
+                <input class="form-control" type="text" name="username" value="<%= u.username %>" form="edit-<%= u._id %>" required />
+              </td>
+              <td class="text-center">
+                <input class="form-check-input" type="checkbox" name="isAdmin" form="edit-<%= u._id %>" <%= u.isAdmin ? 'checked' : '' %> />
+              </td>
+              <td><%= u.createdAt ? new Date(u.createdAt).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' }) : 'N/A' %></td>
+              <td><%= u.createdBy || 'N/A' %></td>
+              <td>
+                <input class="form-control" type="password" name="password" placeholder="Password" form="edit-<%= u._id %>" />
+              </td>
+              <td>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-primary" type="submit" form="edit-<%= u._id %>">Save</button>
+                  <% if (u.username !== currentUser) { %>
+                    <form action="/users/<%= u._id %>/delete" method="post" onsubmit="return confirm('Delete user?');">
+                      <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+                    </form>
+                  <% } %>
+                </div>
+              </td>
             </tr>
+            <form id="edit-<%= u._id %>" action="/users/<%= u._id %>/edit" method="post"></form>
           <% }) %>
         </tbody>
       </table>
