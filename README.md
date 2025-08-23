@@ -32,7 +32,7 @@ Simple contact capture service with a minimal web UI and basic user management.
   - Add a single contact (name, email, optional date).
   - Upload a CSV file (`firstName,email,createdAt`) to bulk import contacts.
   - Download all contacts as CSV.
-  - Administrators can manage users at `/users`.
+  - Administrators can manage users at `/users` (create, edit, reset passwords, and delete). User accounts track when and by whom they were created.
 
 Contacts are stored locally using [nedb-promises](https://github.com/bajankristof/nedb-promises).
 

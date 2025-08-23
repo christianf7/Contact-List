@@ -104,6 +104,8 @@ async function initAdmin() {
       username,
       passwordHash: hashPassword(password),
       isAdmin: true,
+      createdAt: new Date().toISOString(),
+      createdBy: 'system',
     });
     console.log('Admin user created');
   }
@@ -180,7 +182,11 @@ app.post('/login', async (req, res) => {
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return res.send(render('login.ejs', { error: 'Invalid credentials' }));
   }
-  createSession(res, { username: user.username, isAdmin: user.isAdmin });
+  createSession(res, {
+    _id: user._id,
+    username: user.username,
+    isAdmin: user.isAdmin,
+  });
   res.redirect('/contacts');
 });
 
@@ -192,7 +198,8 @@ app.get('/logout', (req, res) => {
 // User management
 app.get('/users', ensureAdmin, async (req, res) => {
   const users = await usersDb.find({});
-  res.send(render('users.ejs', { users }));
+  users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  res.send(render('users.ejs', { users, currentUser: req.session.username }));
 });
 
 app.post('/users/add', ensureAdmin, async (req, res) => {
@@ -207,7 +214,48 @@ app.post('/users/add', ensureAdmin, async (req, res) => {
     username,
     passwordHash: hashPassword(password),
     isAdmin: isAdmin === 'on',
+    createdAt: new Date().toISOString(),
+    createdBy: req.session.username,
   });
+  res.redirect('/users');
+});
+
+app.post('/users/:id/edit', ensureAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { username, password, isAdmin } = req.body;
+  const user = await usersDb.findOne({ _id: id });
+  if (!user) {
+    return res.status(404).send('User not found');
+  }
+  if (!username) {
+    return res.status(400).send('Username required');
+  }
+  const existing = await usersDb.findOne({ username, _id: { $ne: id } });
+  if (existing) {
+    return res.status(400).send('User exists');
+  }
+  const update = { username, isAdmin: isAdmin === 'on' };
+  if (password) {
+    update.passwordHash = hashPassword(password);
+  }
+  await usersDb.update({ _id: id }, { $set: update });
+  if (user.username === req.session.username) {
+    req.session.username = username;
+    req.session.isAdmin = update.isAdmin;
+  }
+  res.redirect('/users');
+});
+
+app.post('/users/:id/delete', ensureAdmin, async (req, res) => {
+  const { id } = req.params;
+  const user = await usersDb.findOne({ _id: id });
+  if (!user) {
+    return res.redirect('/users');
+  }
+  if (user.username === req.session.username) {
+    return res.status(400).send('Cannot delete yourself');
+  }
+  await usersDb.remove({ _id: id });
   res.redirect('/users');
 });
 
