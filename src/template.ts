@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
-function render(view, data = {}) {
+export function render(view: string, data: Record<string, any> = {}): string {
   const file = path.join(__dirname, '..', 'views', view);
   const template = fs.readFileSync(file, 'utf8');
   const code = template
@@ -19,5 +19,3 @@ function render(view, data = {}) {
 
   return compiled(data);
 }
-
-module.exports = { render };

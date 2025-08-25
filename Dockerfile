@@ -7,8 +7,10 @@ WORKDIR /usr/src/app
 # Copy dependency definitions
 COPY package*.json ./
 
-# Install production dependencies
-RUN npm install --production
+# Install dependencies and build
+RUN npm install \
+    && npm run build \
+    && npm prune --production
 
 # Copy application source
 COPY . .
@@ -17,4 +19,4 @@ COPY . .
 EXPOSE 3000
 
 # Launch the app
-CMD ["node", "index.js"]
+CMD ["node", "dist/server.js"]
