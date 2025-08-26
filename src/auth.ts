@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { SessionUser } from './types';

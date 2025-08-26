@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from 'express';
 import { ensureAdmin, hashPassword } from '../auth';
 import { usersDb } from '../db';

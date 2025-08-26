@@ -4,7 +4,8 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "npm run build && node --test test"
   },
   "dependencies": {
     "csv-parse": "^5.5.0",

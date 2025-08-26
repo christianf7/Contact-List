@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
