@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { SessionUser } from './types';
@@ -32,7 +31,7 @@ export function ensureLoggedIn(req: Request, res: Response, next: NextFunction) 
   if (!session) {
     return res.redirect('/login');
   }
-  (req as any).session = session;
+  req.session = session;
   next();
 }
 
@@ -41,7 +40,7 @@ export function ensureAdmin(req: Request, res: Response, next: NextFunction) {
   if (!session || !session.isAdmin) {
     return res.redirect('/no-permission');
   }
-  (req as any).session = session;
+  req.session = session;
   next();
 }
 

@@ -20,3 +20,13 @@ export interface SessionUser {
   username: string;
   isAdmin: boolean;
 }
+
+declare global {
+  namespace Express {
+    interface Request {
+      session?: SessionUser;
+    }
+  }
+}
+
+export {};

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'path';
 import fs from 'fs';
 import Datastore from 'nedb-promises';

@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import { ensureLoggedIn } from '../auth';
@@ -10,7 +9,7 @@ import { Contact } from '../types';
 const router = Router();
 const upload = multer();
 
-router.get('/', ensureLoggedIn, async (req, res) => {
+router.get('/', ensureLoggedIn, async (req: Request, res: Response) => {
   const tag = req.query.tag as string | undefined;
   const sort = req.query.sort as string | undefined;
   let contacts: Contact[] = await contactsDb.find(tag ? { tags: tag } : {});
@@ -38,7 +37,7 @@ router.get('/', ensureLoggedIn, async (req, res) => {
       total,
       labels: JSON.stringify(labels),
       data: JSON.stringify(data),
-      isAdmin: (req as any).session.isAdmin,
+      isAdmin: req.session!.isAdmin,
       tags: allTags,
       currentTag: tag || '',
       sort: sort || '',
@@ -46,7 +45,7 @@ router.get('/', ensureLoggedIn, async (req, res) => {
   );
 });
 
-router.post('/add', ensureLoggedIn, async (req, res) => {
+router.post('/add', ensureLoggedIn, async (req: Request, res: Response) => {
   const { firstName, email, createdAt, tags } = req.body;
   const tagArr = typeof tags === 'string'
     ? tags.split(',').map((t: string) => t.trim()).filter(Boolean)
@@ -64,7 +63,7 @@ router.post('/add', ensureLoggedIn, async (req, res) => {
   }
 });
 
-router.post('/:id/edit', ensureLoggedIn, async (req, res) => {
+router.post('/:id/edit', ensureLoggedIn, async (req: Request, res: Response) => {
   const { id } = req.params;
   const { firstName, email, createdAt, tags } = req.body;
   const tagArr = typeof tags === 'string'
@@ -94,7 +93,7 @@ router.post('/:id/edit', ensureLoggedIn, async (req, res) => {
   }
 });
 
-router.post('/:id/delete', ensureLoggedIn, async (req, res) => {
+router.post('/:id/delete', ensureLoggedIn, async (req: Request, res: Response) => {
   try {
     await contactsDb.remove({ _id: req.params.id });
     res.redirect('/contacts');
@@ -103,7 +102,7 @@ router.post('/:id/delete', ensureLoggedIn, async (req, res) => {
   }
 });
 
-router.post('/bulk', ensureLoggedIn, upload.single('csv'), async (req, res) => {
+router.post('/bulk', ensureLoggedIn, upload.single('csv'), async (req: Request, res: Response) => {
   if (!req.file) {
     return res.status(400).send('CSV file required');
   }
@@ -130,7 +129,7 @@ router.post('/bulk', ensureLoggedIn, upload.single('csv'), async (req, res) => {
   }
 });
 
-router.get('/export', ensureLoggedIn, async (req, res) => {
+router.get('/export', ensureLoggedIn, async (req: Request, res: Response) => {
   const contacts = await contactsDb.find({});
   const lines = [
     'firstName,email,createdAt,tags',
